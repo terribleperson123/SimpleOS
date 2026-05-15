@@ -1,5 +1,13 @@
 [bits 64]
 
+;;CURRENTLY, 41 DISKS ARE LOADED TO SUPPORT UP TO LONG_MODE.ASM
+;;I'M GONNA LOAD KERNEL'S DISK SECTOR + a BIT MORE FROM 0x100000 to 0x1fffff so i'll load one mb for kernel
+;;should be alot more then enough. 
+
+
+KERNEL_ENTRY equ 0x100000 ;;KERNEL_ENTRY
+
+
 long_mode_start:
    mov ax, KERNEL_DATA_SEL
    mov ds, ax
@@ -14,91 +22,115 @@ long_mode_start:
 
    cld
    mov rsp, 0x7000
-
+   
    mov ecx, 0xC0000080 ; some EFER MSR shit to check long mode enabled
    rdmsr
    test eax, 1 << 10 ; bit 10 = LMA, long mode active
    jz .hlt ;;dont do anything now lol
- 
-   call kernel_main_temp  ;;ELSE CALL KMAIN!!! YAY!!! WE'LL MOVE IT TO C LATER YESS!!!
+   
+   ;;load 1 mib worth of disk, from sector S
+    mov eax, 42              ; lba starting, since we've loaded up to 41th disk starting from 0, we now load next from 42
+    mov rdi, KERNEL_ENTRY    ; destination = 0x100000
+    mov ecx, 0x800           ; 2048 sectors = 1 mb.
+
+.load_sector:
+    push rax
+    push rcx
+    push rdi
+    call ata_read_sector     ; eax is laba, rdi is destination
+    pop rdi
+    pop rcx
+    pop rax
+    inc eax                  ; next LBA
+    add rdi, 512             ; n
+    dec ecx
+    jnz .load_sector
+    mov rax, KERNEL_ENTRY ;;not kernel main yet, but its an assembly stub which links to main.c
+    jmp rax
 
 .hlt:
    hlt ;;appatenrly this is an actual ins and i never knew
    jmp .hlt
 
 
-msg db "Hello World! "
-    db "From the kernel.", 0xa, 0x00
+;ngl this is copy paste but fine for now.
 
-;;gonna write in c, but we are here now!
-kernel_main_temp:
-   ;;yay
-   call vga_clear64
-   lea rdi, [msg]
-   call vga_print64
+; ata_read_sector
+; input:
+;   EAX = LBA sector number
+;   RDI = destination buffer address
+;
+; clobbers:
+;   RAX, RBX, RCX, RDX
+ata_read_sector:
+    push rax
+    push rdi
 
+    ; Save LBA in EBX
+    mov ebx, eax
 
-.hlt:
-   hlt
-   jmp .hlt
+.wait_bsy_1:
+    mov dx, 0x1F7
+    in al, dx
+    test al, 0x80              ; BSY bit
+    jnz .wait_bsy_1
 
-vga_putc64:
-   push rbx
-   cmp dil, 0xa ;;apparently dil and dih also exist, so nice
-   je .newline
-;;0xb8000 + ([vga_cursor_row] * 80 + [vga_cursor_col]) * 2, times 2 because it will move 2 bytes 
-   mov ebx, dword [vga_cursor_row]
-   imul ebx, ebx, 80
-   add ebx, dword [vga_cursor_col]
-   shl ebx, 1
-   add ebx, 0xB8000
-    
-   mov ax, di ;al gets lower byte
-   mov ah, 0x0f
-   mov word [rbx], ax
+    ; Select drive, LBA mode, high 4 bits of LBA
+    mov dx, 0x1F6
+    mov eax, ebx
+    shr eax, 24
+    and al, 0x0F
+    or al, 0xE0                ; 1110_0000 = master drive + LBA mode
+    out dx, al
 
-   inc dword [vga_cursor_col]
-   cmp dword [vga_cursor_col], 80
-   je .newline
-   xor rax, rax
-   pop rbx   
-   ret
+    ; Sector count = 1
+    mov dx, 0x1F2
+    mov al, 1
+    out dx, al
 
-.newline:
-   mov dword [vga_cursor_col], 0
-   inc dword [vga_cursor_row]
-   xor rax, rax
-   pop rbx
-   ret
-   
+    ; LBA bits 0..7
+    mov dx, 0x1F3
+    mov eax, ebx
+    out dx, al
 
-vga_print64:
-   mov rsi, rdi
-.loop:
-   xor rax, rax
-   lodsb
-   test al, al
-   jz .done
-   mov di, ax
-   call vga_putc64
+    ; LBA bits 8..15
+    mov dx, 0x1F4
+    mov eax, ebx
+    shr eax, 8
+    out dx, al
 
-   jmp .loop
-.done:
-   xor rax, rax
-   ret
+    ; LBA bits 16..23
+    mov dx, 0x1F5
+    mov eax, ebx
+    shr eax, 16
+    out dx, al
 
+    ; Command: READ SECTORS = 0x20
+    mov dx, 0x1F7
+    mov al, 0x20
+    out dx, al
 
-vga_clear64:   
-   mov rax, 0xB8000
-.loop   
-   mov qword [rax], 0x0 ;8 bytes at a time
-   add rax, 8
-   cmp rax, 0xB8000 + 4000 ;cuz its 4000 bytes of character in vga
-   jne .loop
-   xor rax, rax
-   mov dword [vga_cursor_col], eax
-   mov dword [vga_cursor_row], eax
-   ret
+.wait_bsy_2:
+    mov dx, 0x1F7
+    in al, dx
+    test al, 0x80              ; wait while BSY
+    jnz .wait_bsy_2
 
+.wait_drq:
+    mov dx, 0x1F7
+    in al, dx
+    test al, 0x08              ; DRQ = data ready
+    jz .wait_drq
 
+    ; Read 256 words = 512 bytes from port 0x1F0
+    pop rdi
+    mov dx, 0x1F0
+    mov rcx, 256
+.read_words:
+    in ax, dx
+    mov [rdi], ax
+    add rdi, 2
+    loop .read_words
 
+    pop rax
+    ret

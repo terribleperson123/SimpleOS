@@ -31,7 +31,7 @@ start:
    
    mov al, [bootdrive]
    mov dx, 0x8000 ;;load address
-   mov si, 64 ;;amount of sectors to load   
+   mov si, 41 ;;num sectors from current 
    mov di, word [bootdrive] ;;bootdrive
    call load_disk   
 
