@@ -33,7 +33,8 @@ STAGE2_RESERVED_SECTORS := 41
 
 CFLAGS := -std=gnu11 -ffreestanding -O2 -Wall -Wextra \
           -fno-pie -fno-pic -fno-stack-protector -mno-red-zone \
-          -nostdlib -nostdinc -Iinclude
+          -mgeneral-regs-only -fno-tree-vectorize \
+          -nostdinc -Iinclude 
 
 LDFLAGS := -nostdlib -static -no-pie -z max-page-size=0x1000 -T linker.ld
 
