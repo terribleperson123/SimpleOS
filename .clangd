@@ -1,0 +1,8 @@
+CompileFlags:
+  Add:
+    - -std=gnu11
+    - -ffreestanding
+    - -nostdinc
+    - -Iinclude
+    - -fno-stack-protector
+    - -mno-red-zone
