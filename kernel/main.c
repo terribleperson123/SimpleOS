@@ -1,4 +1,3 @@
-#include "kernel/kernel_attrs.h"
 #include "kernel/vga.h"
 
 KERNEL_FUNCTION int main(void)

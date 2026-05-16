@@ -1,7 +1,7 @@
 #ifndef VGA_H
 #define VGA_H
-#include "stdint.h"
-#include "kernel_attrs.h"
+#include "kernel/stdint.h"
+#include "kernel/kernel_attrs.h"
 
 
 #define VGA_LEN 4000
