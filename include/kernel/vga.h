@@ -1,3 +1,5 @@
+#ifndef VGA_H
+#define VGA_H
 #include "stdint.h"
 #include "kernel_attrs.h"
 
@@ -7,3 +9,4 @@
 KERNEL_FUNCTION void vga_clear(void);
 KERNEL_FUNCTION void vga_writec(char c);
 KERNEL_FUNCTION void vga_write(const char* str);
+#endif
